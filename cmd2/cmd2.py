@@ -70,7 +70,7 @@ from    .support    import (History,
                             replace_with_file_contents,
                             write_to_paste_buffer)
 
-
+from    .settings   import (state)
 
 
 #   Metadata
@@ -84,28 +84,6 @@ __author__      = 'Catherine Devlin'
 __email__       = '?'   #@FIXME
 __maintainer__  = '?'   #@FIXME
 __credits__     = '?'   #@FIXME
-
-
-
-
-
-if not six.PY3:
-    # 
-    # Packrat is causing Python3 errors that I don't understand.
-    # 
-    #     > /usr/local/Cellar/python3/3.2/lib/python3.2/site-packages/pyparsing-1.5.6-py3.2.egg/pyparsing.py(999)scanString()
-    #     -> nextLoc,tokens = parseFn( instring, preloc, callPreParse=False )
-    #     (Pdb) n
-    #     NameError: global name 'exc' is not defined
-    #     
-    #     (Pdb) parseFn
-    #     <bound method Or._parseCache of {Python style comment ^ C style comment}>
-    # 
-    # (2011-07-28) Bug report filed: 
-    #     https://sourceforge.net/tracker/?func=detail&atid=617311&aid=3381439&group_id=97203
-    # 
-    pyparsing.ParserElement.enablePackrat()
-
 
 
 #   @FIXME
@@ -128,416 +106,38 @@ def _attr_get_(obj, attr):
 optparse.Values.get = _attr_get_    #   this is the only use of _attr_get_()
 
 
-
-#   @FIXME
-#       Move to parsers module...without breaking
-#       any code in this file
-pyparsing.ParserElement.setDefaultWhitespaceChars(' \t')
-
-
 class Cmd(cmd.Cmd):
     #   @FIXME
     #       Add DocString 
     #       (This *is* the core class, after all!)
-    
-    
-    #   @FIXME
-    #       CURRENT IDEA (subject to change):
-    #       Refactor into a Settings class, subdivided into:
-    #       -   settable/not-settable
-    #       -   input-related settings (parsing, case-sensitivity, shortcuts, etc.)
-    #       -   output-related settings (printing time, prompt, etc.)
-    #       -   component-level settings (history settings into history class, etc.)
-    echo                = False
-    case_insensitive    = True      # Commands recognized regardless of case
-    continuation_prompt = '> '  
-    timing              = False     # Prints elapsed time for each command
-    
-    #   @FIXME?
-    #       Should this override cmd's `IDENTCHARS`?
-    
-    # make sure your terminators are not in legal_chars!
-    legal_chars         = u'!#$%.:?@_' + pyparsing.alphanums + pyparsing.alphas8bit
-    shortcuts           = { '?' : 'help' , 
-                            '!' : 'shell', 
-                            '@' : 'load' , 
-                            '@@': '_relative_load'}
-
-    abbrev              = True          # Recognize abbreviated commands
-    current_script_dir  = None
-    debug               = True
-    default_file_name   = 'command.txt' # For `save`, `load`, etc.
-    default_to_shell    = False
-    default_extension   = 'txt'         # For `save`, `load`, etc.
-    hist_exclude        = {'ed','edit','eof','history','hi','l','li','list','run','r'}
-    feedback_to_output  = False         # Do include nonessentials in >, | output
-    kept_state          = None
-    locals_in_py        = True
-    no_special_parse    = {'ed','edit','exit','set'}
-    quiet               = False         # Do not suppress nonessential output
-    redirector          = '>'           # for sending output to file
-    reserved_words      = []
-    
-    #   @FIXME
-    #       Refactor into a Settings class (subdivided into settable/not-settable)
-    settable            = stubbornDict(
-        '''
-        abbrev                Accept abbreviated commands
-        case_insensitive      upper- and lower-case both OK
-        colors                Colorized output (*nix only)
-        continuation_prompt   On 2nd+ line of input
-        debug                 Show full error stack on error
-        default_file_name     for `save`, `load`, etc.
-        echo                  Echo command issued into output
-        editor                Program used by `edit` 	
-        feedback_to_output    include nonessentials in `|`, `>` results 
-        prompt                Shell prompt
-        quiet                 Don't print nonessential feedback
-        timing                Report execution times
-        ''')
-    
-    #   ************************************
-    #   End "original" variable declarations
-    #   ************************************
-    #   Starting here, variables were collected
-    #   together from various places within the class.
-    
-    _STOP_AND_EXIT       = True # distinguish end of script file from actual exit
-    _STOP_SCRIPT_NO_EXIT = -999
-    
-    editor = os.environ.get('EDITOR')
-    if not editor:
-        if sys.platform[:3] == 'win':
-            editor = 'notepad'
-        else:
-            for editor in {'gedit', 'kate', 'vim', 'emacs', 'nano', 'pico'}:
-                if subprocess.Popen(['which', editor], stdout=subprocess.PIPE).communicate()[0]:
-                    break
-    
-    #   @FIXME
-    #       Refactor into [config? output?] module
-    colorcodes  =  {
-                    # non-colors
-                    'bold'    :   {True:'\x1b[1m', False:'\x1b[22m'},
-                    'underline':  {True:'\x1b[4m', False:'\x1b[24m'},
-                    # colors
-                    'blue'    :   {True:'\x1b[34m',False:'\x1b[39m'},
-                    'cyan'    :   {True:'\x1b[36m',False:'\x1b[39m'},
-                    'green'   :   {True:'\x1b[32m',False:'\x1b[39m'},
-                    'magenta' :   {True:'\x1b[35m',False:'\x1b[39m'},
-                    'red'     :   {True:'\x1b[31m',False:'\x1b[39m'}
-                   }
-    
-    colors = (platform.system() != 'Windows')
-    
-    
-    #   @FIXME
-    #       Refactor this settings block into 
-    #       parsers.py
-    allow_blank_lines   =   False
-    comment_grammars    =   pyparsing.Or([  pyparsing.pythonStyleComment, 
-                                            pyparsing.cStyleComment ])
-    comment_grammars.addParseAction(lambda x: '')
-    comment_in_progress =   '/*' + pyparsing.SkipTo(pyparsing.stringEnd ^ '*/')
-    multiline_commands  =   []
-    prefix_parser       =   pyparsing.Empty()
-    terminators         =   [';']
-    
-    
     def __init__(self, *args, **kwargs):
         #   @FIXME
         #       Add DocString
-        
         #   @FIXME
         #       Describe what happens in __init__
-        
         #   @FIXME
         #       Is there a way to use `__super__`
         #       that is Python 2+3 compatible?
         cmd.Cmd.__init__(self, *args, **kwargs)
-        
+
         self.initial_stdout = sys.stdout
         self.history        = History()
         self.pystate        = {}
 
-#         self.settings_from_cmd = frozenset({
-#                                     'doc_header',
-#                                     'doc_leader',
-#                                     'identchars',
-#                                     'intro',
-#                                     'lastcmd',
-#                                     'misc_header',
-#                                     'nohelp',
-#                                     'prompt',
-#                                     'ruler',
-#                                     'undoc_header',
-#                                     'use_rawinput'})
+        self.defaultState   = state()
+        self.currState      = self.defaultState
 
-#         self.settings_from_cmd2 = ( 'abbrev',
-#                                     'case_insensitive',
-#                                     'continuation_prompt',
-#                                     'current_script_dir',
-#                                     'debug',
-#                                     'default_file_name',
-#                                     'default_to_shell',
-#                                     'default_extension',
-#                                     'echo',
-#                                     'hist_exclude',
-#                                     'feedback_to_output',
-#                                     'kept_state',
-#                                     'legal_chars',
-#                                     'locals_in_py',
-#                                     'no_special_parse',
-#                                     'quiet',
-#                                     'redirector',
-#                                     'reserved_words',
-#                                     'shortcuts',
-#                                     'timing')
-
-#         self.settings_for_parsing = ('abbrev',
-#                                      'case_insensitive',
-#                                      'default_to_shell',
-#                                      'legal_chars',
-#                                      'locals_in_py',
-#                                      'no_special_parse',
-#                                      'redirector',
-#                                      'reserved_words',
-#                                      'shortcuts')
-        
-        
         #   @FIXME
         #       Why does this need to have `reverse=True`?
-        self.shortcuts      = sorted(self.shortcuts.items(), reverse=True)
-        
-        #   @FIXME
-        #       Refactor into parsers.py
-        self._init_parser()
-        
-    
+        self.currState.shortcuts      = sorted(self.currState.shortcuts.items(), reverse=True)
+
+
 #     def __getattr__(self, name):
 #         #   Only called when attr not found
 #         #   in the usual places
 #         #print("\n" + 'CALLING __getattr__({})'.format( name ) + "\n")
 #         #return self.settings[name]
-        
-        
-    
-    #   @FIXME
-    #       Refactor into parsers.py
-    #   @FIXME
-    #       Refactor into NOT a god-initializer 
-    def _init_parser(self):
-        #   @FIXME
-        #       Add docstring
-        
-        #   @NOTE
-        #   This is one of the biggest pain points of the existing code.
-        #   To aid in readability, I CAPITALIZED all variables that are
-        #   not set on `self`. 
-        #
-        #   That means that CAPITALIZED variables aren't
-        #   used outside of this method.
-        #
-        #   Doing this has allowed me to more easily read what
-        #   variables become a part of other variables during the
-        #   building-up of the various parsers.
-        #
-        #   I realize the capitalized variables is unorthodox
-        #   and potentially anti-convention.  But after reaching out
-        #   to the project's creator several times over roughly 5
-        #   months, I'm still working on this project alone...
-        #   And without help, this is the only way I can move forward.
-        #   
-        #   I have a very poor understanding of the parser's 
-        #   control flow when the user types a command and hits ENTER,
-        #   and until the author (or another pyparsing expert) 
-        #   explains what's happening to me, I have to do silly 
-        #   things like this. :-|
-        #
-        #   Of course, if the impossible happens and this code 
-        #   gets cleaned up, then the variables will be restored to 
-        #   proper capitalization.
-        #
-        #   —Zearin
-        #   http://github.com/zearin
-        #   2012 Mar 26
-        
-        #   ----------------------------
-        #   QuickRef: Pyparsing Operators
-        #   ----------------------------
-        #   ~   creates NotAny using the expression after the operator
-        #
-        #   +   creates And using the expressions before and after the operator
-        #
-        #   |   creates MatchFirst (first left-to-right match) using the 
-        #       expressions before and after the operator
-        #
-        #   ^   creates Or (longest match) using the expressions before and 
-        #       after the operator
-        #
-        #   &   creates Each using the expressions before and after the operator
-        #
-        #   *   creates And by multiplying the expression by the integer operand; 
-        #       if expression is multiplied by a 2-tuple, creates an And of 
-        #       (min,max) expressions (similar to "{min,max}" form in 
-        #       regular expressions); if min is None, intepret as (0,max); 
-        #       if max is None, interpret as expr*min + ZeroOrMore(expr)
-        #
-        #   -   like + but with no backup and retry of alternatives
-        #
-        #   *   repetition of expression
-        #
-        #   ==  matching expression to string; returns True if the string 
-        #       matches the given expression
-        #
-        #   <<  inserts the expression following the operator as the body of the 
-        #       Forward expression before the operator
-        #   ----------------------------
-          
-        #   Aliased for readability inside this method
-        PYP = pyparsing
 
-        #   ----------------------------
-        #   Tell pyparsing how to parse 
-        #   file input from '< filename'
-        #   ----------------------------
-        FILENAME    = PYP.Word(self.legal_chars + '/\\')
-        INPUT_MARK  = PYP.Literal('<')
-        INPUT_MARK.setParseAction(lambda x: '')
-        INPUT_FROM  = FILENAME('INPUT_FROM')
-        INPUT_FROM.setParseAction(replace_with_file_contents)
-        #   ----------------------------
-        
-         
-        DO_NOT_PARSE            =   self.comment_grammars       |   \
-                                    self.comment_in_progress    |   \
-                                    PYP.quotedString
-
-        #OUTPUT_PARSER = (PYP.Literal('>>') | (PYP.WordStart() + '>') | PYP.Regex('[^=]>'))('output')
-        OUTPUT_PARSER           =  (PYP.Literal(   2 * self.redirector) | \
-                                   (PYP.WordStart()  + self.redirector) | \
-                                    PYP.Regex('[^=]' + self.redirector))('output')
-
-        PIPE                    =   PYP.Keyword('|', identChars='|')
-
-        STRING_END              =   PYP.stringEnd ^ '\nEOF'
-        
-        TERMINATOR_PARSER       =   PYP.Or([
-                                        (hasattr(t, 'parseString') and t)
-                                        or PYP.Literal(t) for t in self.terminators
-                                    ])('terminator')
-        
-        #   moved here from class-level variable
-        self.URLRE              =   re.compile('(https?://[-\\w\\./]+)')
-        
-        self.keywords           =   self.reserved_words + [fname[3:] for fname in dir(self) if fname.startswith('do_')]        
-        
-        self.comment_grammars.ignore(PYP.quotedString).setParseAction(lambda x: '')
-        
-        #   not to be confused with `multiln_parser` (below)
-        self.multiline_command  =   PYP.Or([
-                                        PYP.Keyword(c, caseless=self.case_insensitive) 
-                                        for c in self.multiline_commands
-                                    ])('multiline_command')
-        
-        ONELN_COMMAND           =   (   ~self.multiline_command + 
-                                        PYP.Word(self.legal_chars)
-                                    )('command')
-        
-        #ONELN_COMMAND.setDebug(True)
-        
-        #   CASE SENSITIVITY for 
-        #   ONELN_COMMAND and self.multiline_command
-        if self.case_insensitive:
-            #   Set parsers to account for case insensitivity (if appropriate)
-            self.multiline_command.setParseAction(lambda x: x[0].lower())
-            ONELN_COMMAND.setParseAction(lambda x: x[0].lower())
-                                    
-        self.save_parser        = ( PYP.Optional(PYP.Word(PYP.nums)^'*')('idx')
-                                  + PYP.Optional(PYP.Word(self.legal_chars + '/\\'))('fname') 
-                                  + PYP.stringEnd)
-        
-        AFTER_ELEMENTS          =   PYP.Optional(PIPE + 
-                                                    PYP.SkipTo(
-                                                        OUTPUT_PARSER ^ STRING_END,
-                                                        ignore=DO_NOT_PARSE
-                                                    )('pipeTo')
-                                                ) + \
-                                    PYP.Optional(OUTPUT_PARSER + 
-                                                 PYP.SkipTo(
-                                                     STRING_END, 
-                                                     ignore=DO_NOT_PARSE
-                                                 ).setParseAction(lambda x: x[0].strip())('outputTo')
-                                             )
-
-        self.multiln_parser = (((self.multiline_command ^ ONELN_COMMAND) 
-                                +   PYP.SkipTo(
-                                        TERMINATOR_PARSER, 
-                                        ignore=DO_NOT_PARSE
-                                    ).setParseAction(lambda x: x[0].strip())('args') 
-                                +   TERMINATOR_PARSER)('statement') 
-                                +   PYP.SkipTo(
-                                        OUTPUT_PARSER ^ PIPE ^ STRING_END, 
-                                        ignore=DO_NOT_PARSE
-                                    ).setParseAction(lambda x: x[0].strip())('suffix') 
-                                + AFTER_ELEMENTS
-                             )
-        
-        self.multiln_parser.ignore(self.comment_in_progress)
-        
-        self.singleln_parser  = (
-                                    (   ONELN_COMMAND + PYP.SkipTo(
-                                        TERMINATOR_PARSER 
-                                        ^ STRING_END 
-                                        ^ PIPE 
-                                        ^ OUTPUT_PARSER, 
-                                        ignore=DO_NOT_PARSE
-                                    ).setParseAction(lambda x:x[0].strip())('args'))('statement')
-                                + PYP.Optional(TERMINATOR_PARSER)
-                                + AFTER_ELEMENTS)
-        #self.multiln_parser  = self.multiln_parser('multiln_parser')
-        #self.singleln_parser = self.singleln_parser('singleln_parser')
-        
-        
-        #   Configure according to `allow_blank_lines` setting
-        if self.allow_blank_lines:
-            self.blankln_termination_parser = PYP.NoMatch
-        else:
-            self.blankln_terminator = (PYP.lineEnd + PYP.lineEnd)('terminator')
-            self.blankln_terminator('terminator')
-            self.blankln_termination_parser = (
-                                                (self.multiline_command ^ ONELN_COMMAND) 
-                                                + PYP.SkipTo(
-                                                    self.blankln_terminator, 
-                                                    ignore=DO_NOT_PARSE
-                                                ).setParseAction(lambda x: x[0].strip())('args') 
-                                                + self.blankln_terminator)('statement')
-
-        self.blankln_termination_parser = self.blankln_termination_parser('statement')
-        
-        self.parser = self.prefix_parser + (STRING_END                      |
-                                            self.multiln_parser             |
-                                            self.singleln_parser            |
-                                            self.blankln_termination_parser | 
-                                            self.multiline_command          +  
-                                            PYP.SkipTo(
-                                                STRING_END, 
-                                                ignore=DO_NOT_PARSE) 
-                                            )
-        
-        self.parser.ignore(self.comment_grammars)
-        
-        # a not-entirely-satisfactory way of distinguishing
-        # '<' as in "import from" from 
-        # '<' as in "lesser than"
-        self.input_parser = INPUT_MARK                + \
-                            PYP.Optional(INPUT_FROM)  + \
-                            PYP.Optional('>')         + \
-                            PYP.Optional(FILENAME)    + \
-                            (PYP.stringEnd | '|')
-        
-        self.input_parser.ignore(self.comment_in_progress)               
-    
     def _cmdloop(self, intro=None):
         '''
         Repeatedly issue a prompt, accept input, parse an initial prefix
@@ -547,23 +147,22 @@ class Cmd(cmd.Cmd):
 
         # An almost perfect copy from Cmd; however, the pseudo_raw_input portion
         # has been split out so that it can be called separately
-        
+
         self.preloop()
         if self.use_rawinput and self.completekey:
             try:
                 import readline
-                self.old_completer = readline.get_completer()
+                self.currState.old_completer = readline.get_completer()
                 readline.set_completer(self.complete)
                 readline.parse_and_bind(self.completekey + ': complete')
             except ImportError:
-                #   @FIXME
-                #       Why is this passed?
+                # this is passed because the readline method may not be installed (I.E. windows)
                 pass
         try:
             if intro:
-                self.intro = intro
+                self.currState.intro = intro
             if self.intro:
-                self.stdout.write(str(self.intro) + "\n")
+                self.currState.stdout.write(str(self.intro) + "\n")
             stop = None
             while not stop:
                 if self.cmdqueue:
@@ -616,7 +215,7 @@ class Cmd(cmd.Cmd):
                 if len(funcs) is 1:
                     result = 'do_' + funcs[0]
         return result
-    
+
     def cmdloop(self):
         '''
         Initializes a parser and runs `_cmdloop()`.
@@ -640,7 +239,7 @@ class Cmd(cmd.Cmd):
         
         if not self.run_commands_at_invocation(callargs):
             self._cmdloop() 
-         
+
     def onecmd(self, line):
         '''
         Interpret the argument as though it had been typed in response
@@ -663,7 +262,7 @@ class Cmd(cmd.Cmd):
             return self._default(statement)
         stop = func(statement) 
         return stop                
-        
+
     def onecmd_plus_hooks(self, line):
         '''
         Runs `onecmd()` with calls to hook methods at the appropriate places.
@@ -701,7 +300,7 @@ class Cmd(cmd.Cmd):
                 self.perror(str(err), statement)
         finally:
             return self.postparsing_postcmd(stop)         
-    
+
     def run_commands_at_invocation(self, callargs):
         '''
         Runs commands in `omecmd_plus_hooks` before executing callargs.

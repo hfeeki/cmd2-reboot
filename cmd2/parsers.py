@@ -24,7 +24,8 @@ import  optparse,   \
 
 #   Third Party Imports
 #   --------------------------------------------------------
-import  argh,       \   #   includes argparse
+#   argh includes argparse
+import  argh,       \
         pyparsing
 
 __all__ =   [   'OptionParser',
@@ -75,7 +76,6 @@ class OptionParser(optparse.OptionParser):
 class ParsedString(str):
     #   @FIXME
     #       Add DocString
-    
     def full_parsed_statement(self):
         #   @FIXME
         #       Add DocString
